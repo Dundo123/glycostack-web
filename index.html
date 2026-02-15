@@ -1,195 +1,120 @@
 <!DOCTYPE html>
 <html lang="sk">
-  <head>
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    />
-    <title>GlycoStack AI Pro</title>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Glycostack PWA</title>
     <style>
-      body {
-        background: #121212;
-        color: white;
-        font-family: sans-serif;
-        text-align: center;
-        margin: 0;
-      }
-      #camera-container {
-        position: relative;
-        width: 100vw;
-        height: 60vh;
-        background: #000;
-      }
-      video {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-      }
-      .guide-box {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        border: 3px solid #00e676;
-        width: 250px;
-        height: 250px;
-        border-radius: 20px;
-        pointer-events: none;
-      }
-      .controls {
-        padding: 15px;
-        background: #1a1a1a;
-      }
-      .btn-capture {
-        width: 70px;
-        height: 70px;
-        background: white;
-        border-radius: 50%;
-        border: 5px solid #00e676;
-      }
-      #status-light {
-        display: inline-block;
-        width: 15px;
-        height: 15px;
-        border-radius: 50%;
-        background: grey;
-        margin-right: 5px;
-      }
-      .result-panel {
-        background: #000;
-        padding: 10px;
-        border-top: 2px solid #00e676;
-        font-size: 1.1rem;
-      }
-      input {
-        background: #333;
-        color: #00e676;
-        border: 1px solid #555;
-        padding: 5px;
-        width: 60px;
-        font-size: 1rem;
-        text-align: center;
-      }
+        * { box-sizing: border-box; }
+        body { 
+            font-family: sans-serif; 
+            background: #000000; color: #ffffff; margin: 0; padding: 15px;
+            display: flex; flex-direction: column; height: 100vh;
+        }
+        .status-header {
+            background: #1a1a1a; padding: 20px; border-radius: 15px;
+            text-align: center; border: 1px solid #333; margin-bottom: 20px;
+        }
+        .label { color: #888; font-size: 0.8rem; text-transform: uppercase; }
+        .value { color: #ff9800; font-size: 2.5rem; font-weight: bold; margin: 5px 0; }
+        
+        #stack-list { flex-grow: 1; overflow-y: auto; margin-bottom: 20px; }
+        .stack-item {
+            background: #1a1a1a; margin-bottom: 10px; padding: 15px;
+            border-radius: 12px; border-left: 5px solid #ff9800;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .food-name { font-weight: bold; font-size: 1.1rem; text-transform: capitalize; }
+        .food-carbs { color: #ff9800; font-weight: bold; font-size: 1.2rem; }
+
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        button {
+            border: none; border-radius: 15px; padding: 20px;
+            font-size: 1.1rem; font-weight: bold; cursor: pointer;
+            color: white; display: flex; flex-direction: column; align-items: center; gap: 10px;
+        }
+        .btn-voice { background: #2e7d32; }
+        .btn-photo { background: #1565c0; }
+        button:active { transform: scale(0.98); opacity: 0.8; }
     </style>
-  </head>
-  <body>
-    <div id="camera-container">
-      <video id="webcam" autoplay playsinline></video>
-      <div class="guide-box"></div>
+</head>
+<body>
+
+    <div class="status-header">
+        <div class="label">AKTÍVNE SACHARIDY V KRVI</div>
+        <div class="value" id="total-display">0.0g</div>
+        <div class="label">DENNÝ LIMIT: 40g</div>
     </div>
-    <div class="result-panel">
-      <span id="status-light"></span>
-      <span id="precision-text">Čakám na foto...</span><br />
-      Váha: <input type="number" id="weight-input" value="0" /> g |
-      <b>Sacharidy: <span id="carb-result">0</span>g</b>
-    </div>
+
+    <div id="stack-list">
+        </div>
+
     <div class="controls">
-      <div id="instruction" style="color: #00e676; margin-bottom: 10px">
-        KROK 1: Odfoť ZHORA
-      </div>
-      <button class="btn-capture" onclick="takeAction()"></button>
-      <button
-        onclick="startVoice()"
-        style="
-          margin-left: 10px;
-          background: none;
-          border: none;
-          font-size: 2rem;
-        "
-      >
-        🎤
-      </button>
+        <button class="btn-voice" onclick="startVoice()">
+            <span style="font-size: 2rem;">🎤</span> HLAS
+        </button>
+        <button class="btn-photo" onclick="takePhoto()">
+            <span style="font-size: 2rem;">📷</span> FOTO / SCAN
+        </button>
     </div>
 
     <script>
-      const video = document.getElementById('webcam');
-      const instruction = document.getElementById('instruction');
-      const carbResult = document.getElementById('carb-result');
-      const weightInput = document.getElementById('weight-input');
-      const statusLight = document.getElementById('status-light');
-      const precisionText = document.getElementById('precision-text');
-      let photos = [];
-      let state = 'top';
-      const API_KEY = 'AIzaSyCfRBV_Jl_u5bJXlJhfcH3QQ_qSorr_Ue4';
+        let totalCarbs = 0;
 
-      async function init() {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
-        });
-        video.srcObject = stream;
-      }
+        // Funkcia, ktorá pridá položku do zoznamu a pripočíta gramy
+        function addItem(name, amount) {
+            const list = document.getElementById('stack-list');
+            const item = document.createElement('div');
+            item.className = 'stack-item';
+            item.innerHTML = `
+                <span class="food-name">${name}</span>
+                <span class="food-carbs">+${amount}g</span>
+            `;
+            list.prepend(item); 
 
-      function takeAction() {
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        canvas.getContext('2d').drawImage(video, 0, 0);
-        photos.push(canvas.toDataURL('image/jpeg').split(',')[1]);
-
-        if (state === 'top') {
-          state = 'side';
-          instruction.innerText = 'KROK 2: Odfoť ZBOKU (alebo čiarový kód)';
-        } else {
-          instruction.innerText = 'AI analyzuje (Google Sken)...';
-          analyze();
+            totalCarbs += amount;
+            document.getElementById('total-display').innerText = totalCarbs.toFixed(1) + 'g';
         }
-      }
 
-      async function analyze() {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
-        const prompt = `Ak je na fotke čiarový kód, vráť nutričné hodnoty na 100g. Ak je tam jedlo, odhadni gramáž a sacharidy. Formát: {"vaha": 200, "sacharidy_na_100g": 15, "typ": "vizual/sken"}`;
+        // Hlasové ovládanie
+        function startVoice() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                alert("Mikrofón nie je podporovaný v tomto prehliadači.");
+                return;
+            }
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'sk-SK';
+            
+            recognition.onstart = () => { 
+                console.log("Počúvam..."); 
+                document.querySelector('.btn-voice').style.background = "red";
+            };
 
-        const response = await fetch(url, {
-          method: 'POST',
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  { text: prompt },
-                  { inline_data: { mime_type: 'image/jpeg', data: photos[0] } },
-                  { inline_data: { mime_type: 'image/jpeg', data: photos[1] } },
-                ],
-              },
-            ],
-          }),
-        });
-        const res = await response.json();
-        const text = res.candidates[0].content.parts[0].text;
-        const data = JSON.parse(text.match(/\{.*\}/)[0]);
+            recognition.onresult = (event) => {
+                const text = event.results[0][0].transcript;
+                // Ak povieš "banán", priradíme mu 23g (priemerný banán)
+                let carbs = 20; 
+                if(text.includes("banán")) carbs = 23;
+                if(text.includes("jablko")) carbs = 15;
+                if(text.includes("rohlík")) carbs = 30;
 
-        weightInput.value = data.vaha;
-        updateResult(data.sacharidy_na_100g, data.typ);
-      }
+                addItem(text, carbs);
+                document.querySelector('.btn-voice').style.background = "#2e7d32";
+            };
 
-      function updateResult(sach100, typ) {
-        const total = (weightInput.value / 100) * sach100;
-        carbResult.innerText = Math.round(total);
-        if (typ === 'sken') {
-          statusLight.style.background = 'green';
-          precisionText.innerText = 'Vysoká (Google Sken)';
-        } else {
-          statusLight.style.background = 'orange';
-          precisionText.innerText = 'Stredná (Odhad)';
+            recognition.onerror = () => {
+                document.querySelector('.btn-voice').style.background = "#2e7d32";
+                alert("Chyba mikrofónu. Skontrolujte povolenia.");
+            };
+
+            recognition.start();
         }
-      }
 
-      function startVoice() {
-        const recognition = new (window.SpeechRecognition ||
-          window.webkitSpeechRecognition)();
-        recognition.lang = 'sk-SK';
-        recognition.onresult = (e) => {
-          const val = e.results[0][0].transcript;
-          const num = val.match(/\d+/);
-          if (num) {
-            weightInput.value = num[0];
-            updateResult(15, 'manual');
-          }
-        };
-        recognition.start();
-      }
-
-      window.onload = init;
+        // Simulácia foto/scanu (v ďalšom kroku pripojíme reálnu kameru)
+        function takePhoto() {
+            addItem("Foto analýza...", 12.5);
+        }
     </script>
-  </body>
+</body>
 </html>
